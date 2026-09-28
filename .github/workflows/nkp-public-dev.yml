@@ -65,3 +65,27 @@ jobs:
             sleep 2
           done
           mysql -h 127.0.0.1 -P 3306 -u root nkp_dumy < nkp-src/database/nkp_dumy_seed.sql
+
+      - name: Start NKP backend
+        working-directory: nkp-src
+        env:
+          NODE_ENV: development
+          PORT: "3100"
+          SESSION_SECRET: nkp-public-vite-session
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_USER: root
+          DB_PASSWORD: "1234"
+          DB_NAME: nkp_dumy
+        run: |
+          nohup node --watch src/server.js > ../nkp-backend.log 2>&1 &
+          echo $! > ../nkp-backend.pid
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:3100/login >/dev/null; then
+              echo "NKP backend ready on 3100"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat ../nkp-backend.log || true
+          exit 1
