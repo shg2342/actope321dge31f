@@ -155,3 +155,19 @@ jobs:
           name: nkp-dev-url
           path: nkp-dev-url.txt
           retention-days: 1
+
+      - name: Keep Vite admin online
+        run: |
+          echo "Vite frontend: $CLOUDFLARE_URL"
+          while kill -0 "$(cat cloudflared.pid)" 2>/dev/null \
+            && kill -0 "$(cat nkp-backend.pid)" 2>/dev/null \
+            && kill -0 "$(cat vite-dev.pid)" 2>/dev/null; do
+            sleep 30
+          done
+          echo "--- backend ---"
+          tail -n 100 nkp-backend.log || true
+          echo "--- vite ---"
+          tail -n 100 vite-dev.log || true
+          echo "--- cloudflared ---"
+          tail -n 100 cloudflared.log || true
+          exit 1
