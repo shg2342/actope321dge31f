@@ -15,6 +15,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: "1234"
+          MARIADB_DATABASE: nkp_dumy
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
     steps:
       - name: Checkout private NKP source
         uses: actions/checkout@v4
@@ -34,3 +48,20 @@ jobs:
       - name: Install dependencies
         working-directory: nkp-src
         run: npm ci
+
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client
+
+      - name: Restore NKP database
+        env:
+          MYSQL_PWD: "1234"
+        run: |
+          for i in {1..40}; do
+            if mysql -h 127.0.0.1 -P 3306 -u root -e "SELECT 1" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -P 3306 -u root nkp_dumy < nkp-src/database/nkp_dumy_seed.sql
