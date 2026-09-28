@@ -94,3 +94,38 @@ jobs:
             -o /tmp/cloudflared
           sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared --version
+
+      - name: Start Cloudflare Quick Tunnel
+        run: |
+          nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3100 > cloudflared.log 2>&1 &
+          echo $! > cloudflared.pid
+          URL=""
+          for i in {1..60}; do
+            URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' cloudflared.log | head -n1 || true)"
+            if [ -n "$URL" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$URL" ]; then
+            cat cloudflared.log || true
+            exit 1
+          fi
+          echo "CLOUDFLARE_URL=$URL" >> "$GITHUB_ENV"
+          echo "$URL" > nkp-dev-url.txt
+          echo "NKP_DEV_URL=$URL"
+
+      - name: Upload URL only
+        uses: actions/upload-artifact@v4
+        with:
+          name: nkp-dev-url
+          path: nkp-dev-url.txt
+          retention-days: 1
+
+      - name: Keep tunnel online
+        run: |
+          echo "NKP server: $CLOUDFLARE_URL"
+          while kill -0 "$(cat cloudflared.pid)" 2>/dev/null && kill -0 "$(cat nkp-dev.pid)" 2>/dev/null; do
+            sleep 30
+          done
+          exit 1
