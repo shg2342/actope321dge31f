@@ -1,7 +1,6 @@
 name: NKP Public Dev Runner
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
@@ -9,130 +8,20 @@ on:
       - ".github/workflows/nkp-public-dev.yml"
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  run-nkp:
+  cancel-current:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
-    services:
-      mariadb:
-        image: mariadb:10.11
-        env:
-          MARIADB_ROOT_PASSWORD: "1234"
-          MARIADB_DATABASE: nkp_dumy
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
-
     steps:
-      - name: Checkout private NKP source
-        uses: actions/checkout@v4
-        with:
-          repository: shg2342/nkp-v2-codex
-          ref: main
-          token: ${{ secrets.TOKEN }}
-          path: nkp-src
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install dependencies
-        working-directory: nkp-src
-        run: npm ci
-
-      - name: Install MySQL client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y default-mysql-client
-
-      - name: Restore NKP database
+      - name: Cancel previous NKP run
         env:
-          MYSQL_PWD: "1234"
+          GH_TOKEN: ${{ github.token }}
         run: |
-          for i in {1..40}; do
-            if mysql -h 127.0.0.1 -P 3306 -u root -e "SELECT 1" >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          mysql -h 127.0.0.1 -P 3306 -u root nkp_dumy < nkp-src/database/nkp_dumy_seed.sql
-          mysql -h 127.0.0.1 -P 3306 -u root -N -e "SELECT CONCAT('tables=', COUNT(*)) FROM information_schema.tables WHERE table_schema='nkp_dumy';"
-
-      - name: Start NKP development server
-        working-directory: nkp-src
-        env:
-          NODE_ENV: development
-          PORT: "3100"
-          SESSION_SECRET: nkp-public-dev-session
-          DB_HOST: 127.0.0.1
-          DB_PORT: "3306"
-          DB_USER: root
-          DB_PASSWORD: "1234"
-          DB_NAME: nkp_dumy
-        run: |
-          nohup node --watch src/server.js > ../nkp-dev.log 2>&1 &
-          echo $! > ../nkp-dev.pid
-          for i in {1..40}; do
-            if curl -fsS http://127.0.0.1:3100/login >/dev/null; then
-              echo "NKP dev server ready"
-              exit 0
-            fi
-            sleep 2
-          done
-          cat ../nkp-dev.log || true
-          exit 1
-
-      - name: Install cloudflared
-        run: |
-          curl -L --fail --retry 3 \
-            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-            -o /tmp/cloudflared
-          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-          cloudflared --version
-
-      - name: Start Cloudflare Quick Tunnel
-        run: |
-          nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3100 > cloudflared.log 2>&1 &
-          echo $! > cloudflared.pid
-          URL=""
-          for i in {1..60}; do
-            URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' cloudflared.log | head -n1 || true)"
-            if [ -n "$URL" ]; then
-              break
-            fi
-            sleep 2
-          done
-          if [ -z "$URL" ]; then
-            cat cloudflared.log || true
-            exit 1
-          fi
-          echo "CLOUDFLARE_URL=$URL" >> "$GITHUB_ENV"
-          echo "$URL" > nkp-dev-url.txt
-          echo "NKP_DEV_URL=$URL"
-
-      - name: Upload URL only
-        uses: actions/upload-artifact@v4
-        with:
-          name: nkp-dev-url
-          path: nkp-dev-url.txt
-          retention-days: 1
-
-      - name: Keep tunnel online
-        run: |
-          echo "NKP server: $CLOUDFLARE_URL"
-          while kill -0 "$(cat cloudflared.pid)" 2>/dev/null && kill -0 "$(cat nkp-dev.pid)" 2>/dev/null; do
-            sleep 30
-          done
-          exit 1
-
-# run trigger
+          curl -fsS -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/shg2342/actope321dge31f/actions/runs/36407922890/cancel
+          echo "cancel requested for run 36407922890"
