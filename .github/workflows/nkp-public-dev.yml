@@ -61,3 +61,27 @@ jobs:
           done
           mysql -h 127.0.0.1 -P 3306 -u root nkp_dumy < nkp-src/database/nkp_dumy_seed.sql
           mysql -h 127.0.0.1 -P 3306 -u root -N -e "SELECT CONCAT('tables=', COUNT(*)) FROM information_schema.tables WHERE table_schema='nkp_dumy';"
+
+      - name: Start NKP development server
+        working-directory: nkp-src
+        env:
+          NODE_ENV: development
+          PORT: "3100"
+          SESSION_SECRET: nkp-public-dev-session
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_USER: root
+          DB_PASSWORD: "1234"
+          DB_NAME: nkp_dumy
+        run: |
+          nohup node --watch src/server.js > ../nkp-dev.log 2>&1 &
+          echo $! > ../nkp-dev.pid
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:3100/login >/dev/null; then
+              echo "NKP dev server ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat ../nkp-dev.log || true
+          exit 1
