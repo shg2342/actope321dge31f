@@ -3,8 +3,28 @@ name: NKP Public Dev Runner
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  placeholder:
+  run-nkp:
     runs-on: ubuntu-latest
     steps:
-      - run: echo ready
+      - name: Checkout private NKP source
+        uses: actions/checkout@v4
+        with:
+          repository: shg2342/nkp-v2-codex
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          path: nkp-src
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: nkp-src
+        run: npm ci
